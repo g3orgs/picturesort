@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PictureSort - Image Sorting by Date
+PictureSort - Image Sorting by Date and GPS coordinates
 
 A script for automatically sorting and renaming images
 based on their capture date.
