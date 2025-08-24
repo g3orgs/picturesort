@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PictureSort - Bildsortierung nach Datum
+PictureSort - Image Sorting by Date
 
-Ein Skript zum automatischen Sortieren und Umbenennen von Bildern
-basierend auf ihrem Aufnahmedatum.
+A script for automatically sorting and renaming images
+based on their capture date.
 """
 
 import os
@@ -20,13 +20,13 @@ try:
     from PIL import Image, ExifTags
     from tqdm import tqdm
 except ImportError as e:
-    print(f"Fehler: Benötigte Bibliothek nicht gefunden: {e}")
-    print("Bitte installiere die Abhängigkeiten mit: pip install -r requirements.txt")
+    print(f"Error: Required library not found: {e}")
+    print("Please install dependencies with: pip install -r requirements.txt")
     sys.exit(1)
 
 
 class ImageSorter:
-    """Hauptklasse für die Bildsortierung."""
+    """Main class for image sorting."""
     
     def __init__(self, source_dir: str, dest_dir: str, include_gps: bool = False, include_dir: bool = False):
         self.source_dir = Path(source_dir)
@@ -43,28 +43,28 @@ class ImageSorter:
             'copied_files': 0,
             'error_files': 0
         }
-        # Liste für GPS-Daten für CSV-Export
+        # List for GPS data for CSV export
         self.gps_data = []
         
     def find_image_files(self) -> List[Path]:
-        """Findet alle Bilddateien im Quellverzeichnis rekursiv."""
+        """Finds all image files in the source directory recursively."""
         image_files = []
         
         if not self.source_dir.exists():
-            raise FileNotFoundError(f"Quellverzeichnis existiert nicht: {self.source_dir}")
+            raise FileNotFoundError(f"Source directory does not exist: {self.source_dir}")
             
-        print(f"Durchsuche Verzeichnis: {self.source_dir}")
+        print(f"Searching directory: {self.source_dir}")
         
         for file_path in self.source_dir.rglob('*'):
             if file_path.is_file() and file_path.suffix.lower() in self.supported_extensions:
                 image_files.append(file_path)
                 
-        print(f"Gefunden: {len(image_files)} Bilddateien")
+        print(f"Found: {len(image_files)} image files")
         self.stats['total_files'] = len(image_files)
         return image_files
     
     def get_gps_coordinates(self, image_path: Path) -> Optional[Tuple[float, float]]:
-        """Extrahiert GPS-Koordinaten aus einem Bild."""
+        """Extracts GPS coordinates from an image."""
         if not self.include_gps:
             return None
             
@@ -73,37 +73,37 @@ class ImageSorter:
                 if hasattr(img, '_getexif') and img._getexif() is not None:
                     exif = img._getexif()
                     
-                    # GPS-Tags finden
+                    # Find GPS tags
                     gps_tags = {}
                     for tag_id in exif:
                         tag = ExifTags.TAGS.get(tag_id, tag_id)
                         if isinstance(tag, str) and tag.startswith('GPS'):
                             gps_tags[tag] = exif[tag_id]
                     
-                    # GPS-Koordinaten extrahieren
+                    # Extract GPS coordinates
                     if 'GPSLatitude' in gps_tags and 'GPSLongitude' in gps_tags:
                         try:
                             lat = self._convert_to_degrees(gps_tags['GPSLatitude'])
                             lon = self._convert_to_degrees(gps_tags['GPSLongitude'])
                             
-                            # GPS-Latitude-Referenz berücksichtigen
+                            # Consider GPS latitude reference
                             if 'GPSLatitudeRef' in gps_tags and gps_tags['GPSLatitudeRef'] == 'S':
                                 lat = -lat
                             
-                            # GPS-Longitude-Referenz berücksichtigen
+                            # Consider GPS longitude reference
                             if 'GPSLongitudeRef' in gps_tags and gps_tags['GPSLongitudeRef'] == 'W':
                                 lon = -lon
                             
                             self.stats['gps_files'] += 1
                             return (lat, lon)
                         except Exception as e:
-                            print(f"Fehler bei GPS-Konvertierung für {image_path}: {e}")
+                            print(f"Error during GPS conversion for {image_path}: {e}")
                     
-                    # Alternative: GPSInfo-Format (wie in den Debug-Ausgaben gesehen)
+                    # Alternative: GPSInfo format (as seen in debug outputs)
                     elif 'GPSInfo' in gps_tags:
                         gps_info = gps_tags['GPSInfo']
                         try:
-                            # GPSInfo hat die Struktur: {1: 'N', 2: (lat_deg, lat_min, lat_sec), 3: 'E', 4: (lon_deg, lon_min, lon_sec)}
+                            # GPSInfo has structure: {1: 'N', 2: (lat_deg, lat_min, lat_sec), 3: 'E', 4: (lon_deg, lon_min, lon_sec)}
                             if 2 in gps_info and 4 in gps_info:
                                 lat_dms = gps_info[2]  # (degrees, minutes, seconds)
                                 lon_dms = gps_info[4]  # (degrees, minutes, seconds)
@@ -111,7 +111,7 @@ class ImageSorter:
                                 lat = self._convert_to_degrees(lat_dms)
                                 lon = self._convert_to_degrees(lon_dms)
                                 
-                                # Referenz berücksichtigen
+                                # Consider reference
                                 if 1 in gps_info and gps_info[1] == 'S':
                                     lat = -lat
                                 if 3 in gps_info and gps_info[3] == 'W':
@@ -120,15 +120,15 @@ class ImageSorter:
                                 self.stats['gps_files'] += 1
                                 return (lat, lon)
                         except Exception as e:
-                            print(f"Fehler bei GPSInfo-Konvertierung für {image_path}: {e}")
+                            print(f"Error during GPSInfo conversion for {image_path}: {e}")
                         
         except Exception as e:
-            print(f"Warnung: Konnte GPS-Daten nicht lesen für {image_path}: {e}")
+            print(f"Warning: Could not read GPS data for {image_path}: {e}")
         
         return None
     
     def _convert_to_degrees(self, dms) -> float:
-        """Konvertiert GPS-Koordinaten von DMS (Degrees, Minutes, Seconds) zu Dezimalgrad."""
+        """Converts GPS coordinates from DMS (Degrees, Minutes, Seconds) to decimal degrees."""
         degrees = float(dms[0])
         minutes = float(dms[1])
         seconds = float(dms[2])
@@ -136,20 +136,20 @@ class ImageSorter:
         return degrees + (minutes / 60.0) + (seconds / 3600.0)
     
     def get_image_date(self, image_path: Path) -> Tuple[datetime, str]:
-        """Extrahiert das Aufnahmedatum aus einem Bild und gibt Datum und Quelle zurück."""
+        """Extracts the capture date from an image and returns date and source."""
         try:
             with Image.open(image_path) as img:
-                # Versuche Exif-Daten zu lesen
+                # Try to read EXIF data
                 if hasattr(img, '_getexif') and img._getexif() is not None:
                     exif = img._getexif()
                     
-                    # Suche nach dem DateTime-Original Tag
+                    # Search for DateTimeOriginal tag
                     for tag_id in exif:
                         tag = ExifTags.TAGS.get(tag_id, tag_id)
                         if tag == 'DateTimeOriginal':
                             date_str = exif[tag_id]
                             try:
-                                # Parse Exif-Datum (Format: YYYY:MM:DD HH:MM:SS)
+                                # Parse EXIF date (format: YYYY:MM:DD HH:MM:SS)
                                 date = datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S')
                                 self.stats['exif_files'] += 1
                                 return date, f"EXIF: {date_str}"
@@ -157,36 +157,36 @@ class ImageSorter:
                                 pass
                                 
         except Exception as e:
-            print(f"Warnung: Konnte Exif-Daten nicht lesen für {image_path}: {e}")
+            print(f"Warning: Could not read EXIF data for {image_path}: {e}")
         
-        # Fallback: Verwende Dateisystem-Erstellungsdatum
+        # Fallback: Use filesystem creation date
         try:
             stat = image_path.stat()
-            # Verwende das früheste verfügbare Datum
+            # Use the earliest available date
             date = datetime.fromtimestamp(min(stat.st_ctime, stat.st_mtime))
             self.stats['filesystem_date_files'] += 1
-            return date, f"Dateisystem: {date.strftime('%Y-%m-%d %H:%M:%S')}"
+            return date, f"Filesystem: {date.strftime('%Y-%m-%d %H:%M:%S')}"
         except Exception as e:
-            print(f"Warnung: Konnte Dateisystem-Datum nicht lesen für {image_path}: {e}")
-            # Letzter Fallback: Aktuelles Datum
+            print(f"Warning: Could not read filesystem date for {image_path}: {e}")
+            # Last fallback: Current date
             date = datetime.now()
             self.stats['current_date_files'] += 1
-            return date, f"Aktuelles Datum: {date.strftime('%Y-%m-%d %H:%M:%S')}"
+            return date, f"Current date: {date.strftime('%Y-%m-%d %H:%M:%S')}"
     
     def get_subfolder_name(self, image_path: Path) -> str:
-        """Extrahiert den Namen des Unterordners relativ zum Quellverzeichnis."""
+        """Extracts the name of the subfolder relative to the source directory."""
         if not self.include_dir:
             return ""
             
         try:
-            # Relativer Pfad vom Quellverzeichnis
+            # Relative path from source directory
             relative_path = image_path.relative_to(self.source_dir)
             
-            # Wenn das Bild direkt im Quellverzeichnis liegt
+            # If image is directly in source directory
             if relative_path.parent == Path('.'):
                 return ""
             
-            # Ersten Unterordner-Namen extrahieren
+            # Extract first subfolder name
             subfolder = relative_path.parts[0]
             return f"_{subfolder}_"
             
@@ -194,15 +194,15 @@ class ImageSorter:
             return ""
     
     def generate_new_filename(self, original_path: Path, date: datetime, gps_coords: Optional[Tuple[float, float]] = None, subfolder: str = "") -> str:
-        """Generiert einen neuen Dateinamen basierend auf dem Datum, GPS und Unterordner."""
+        """Generates a new filename based on date, GPS and subfolder."""
         date_str = date.strftime('%Y%m%d_%H%M%S')
         original_name = original_path.stem
         extension = original_path.suffix.lower()
         
-        # Entferne ungültige Zeichen aus dem Dateinamen
+        # Remove invalid characters from filename
         safe_name = re.sub(r'[^\w\-_.]', '_', original_name)
         
-        # Baue Dateinamen zusammen - GPS kommt ans Ende
+        # Build filename - GPS goes at the end
         filename_parts = [date_str]
         
         if subfolder:
@@ -210,7 +210,7 @@ class ImageSorter:
         
         filename_parts.append(safe_name)
         
-        # GPS-Koordinaten ans Ende setzen
+        # Add GPS coordinates at the end
         if gps_coords:
             lat, lon = gps_coords
             filename_parts.append(f"_{lat:.6f},{lon:.6f}_")
@@ -218,7 +218,7 @@ class ImageSorter:
         return f"{'_'.join(filename_parts)}{extension}"
     
     def get_unique_filename(self, base_filename: str) -> str:
-        """Stellt sicher, dass der Dateiname im Zielverzeichnis eindeutig ist."""
+        """Ensures that the filename is unique in the destination directory."""
         if not self.dest_dir.exists():
             return base_filename
             
@@ -236,9 +236,9 @@ class ImageSorter:
             counter += 1
     
     def create_gps_csv(self) -> None:
-        """Erstellt eine CSV-Datei mit GPS-Daten für Google Maps Import."""
+        """Creates a CSV file with GPS data for Google Maps import."""
         if not self.gps_data:
-            print("Keine GPS-Daten gefunden - CSV-Datei wird nicht erstellt.")
+            print("No GPS data found - CSV file will not be created.")
             return
             
         csv_filename = self.dest_dir / "gps_positions.csv"
@@ -247,70 +247,70 @@ class ImageSorter:
             with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 
-                # Header für Google Maps Import
+                # Header for Google Maps import
                 writer.writerow(['Name', 'Latitude', 'Longitude', 'Description'])
                 
-                # GPS-Daten schreiben
+                # Write GPS data
                 for filename, lat, lon, date_str in self.gps_data:
-                    description = f"Foto aufgenommen am {date_str}"
+                    description = f"Photo taken on {date_str}"
                     writer.writerow([filename, lat, lon, description])
                     
-            print(f"GPS-Positionsdaten gespeichert in: {csv_filename}")
-            print(f"CSV-Datei enthält {len(self.gps_data)} Einträge für Google Maps Import")
+            print(f"GPS position data saved in: {csv_filename}")
+            print(f"CSV file contains {len(self.gps_data)} entries for Google Maps import")
             
         except Exception as e:
-            print(f"Fehler beim Erstellen der CSV-Datei: {e}")
+            print(f"Error creating CSV file: {e}")
     
     def print_statistics(self) -> None:
-        """Gibt eine detaillierte Statistik aus."""
+        """Prints detailed statistics."""
         print("\n" + "="*60)
-        print("STATISTIK")
+        print("STATISTICS")
         print("="*60)
-        print(f"Gesamte Bilddateien gefunden: {self.stats['total_files']}")
-        print(f"Erfolgreich kopiert: {self.stats['copied_files']}")
-        print(f"Fehler beim Kopieren: {self.stats['error_files']}")
+        print(f"Total image files found: {self.stats['total_files']}")
+        print(f"Successfully copied: {self.stats['copied_files']}")
+        print(f"Copy errors: {self.stats['error_files']}")
         print()
-        print("Datenquellen:")
-        print(f"  - EXIF-Daten verwendet: {self.stats['exif_files']} ({self.stats['exif_files']/max(1, self.stats['total_files'])*100:.1f}%)")
-        print(f"  - Dateisystem-Datum verwendet: {self.stats['filesystem_date_files']} ({self.stats['filesystem_date_files']/max(1, self.stats['total_files'])*100:.1f}%)")
-        print(f"  - Aktuelles Datum verwendet: {self.stats['current_date_files']} ({self.stats['current_date_files']/max(1, self.stats['total_files'])*100:.1f}%)")
+        print("Data sources:")
+        print(f"  - EXIF data used: {self.stats['exif_files']} ({self.stats['exif_files']/max(1, self.stats['total_files'])*100:.1f}%)")
+        print(f"  - Filesystem date used: {self.stats['filesystem_date_files']} ({self.stats['filesystem_date_files']/max(1, self.stats['total_files'])*100:.1f}%)")
+        print(f"  - Current date used: {self.stats['current_date_files']} ({self.stats['current_date_files']/max(1, self.stats['total_files'])*100:.1f}%)")
         if self.include_gps:
-            print(f"  - GPS-Daten gefunden: {self.stats['gps_files']} ({self.stats['gps_files']/max(1, self.stats['total_files'])*100:.1f}%)")
+            print(f"  - GPS data found: {self.stats['gps_files']} ({self.stats['gps_files']/max(1, self.stats['total_files'])*100:.1f}%)")
         print("="*60)
     
     def sort_images(self) -> None:
-        """Hauptfunktion zum Sortieren der Bilder."""
-        # Erstelle Zielverzeichnis falls es nicht existiert
+        """Main function for sorting images."""
+        # Create destination directory if it doesn't exist
         self.dest_dir.mkdir(parents=True, exist_ok=True)
         
-        # Finde alle Bilddateien
+        # Find all image files
         image_files = self.find_image_files()
         
         if not image_files:
-            print("Keine Bilddateien gefunden.")
+            print("No image files found.")
             return
         
-        # Sammle Bilder mit ihren Daten
-        print("Analysiere Bilddaten...")
+        # Collect images with their data
+        print("Analyzing image data...")
         images_with_data = []
         
-        for image_path in tqdm(image_files, desc="Analysiere Bilder"):
+        for image_path in tqdm(image_files, desc="Analyzing images"):
             try:
                 date, source = self.get_image_date(image_path)
                 gps_coords = self.get_gps_coordinates(image_path)
                 subfolder = self.get_subfolder_name(image_path)
                 images_with_data.append((image_path, date, source, gps_coords, subfolder))
             except Exception as e:
-                print(f"Fehler beim Analysieren von {image_path}: {e}")
+                print(f"Error analyzing {image_path}: {e}")
                 self.stats['error_files'] += 1
         
-        # Sortiere nach Datum (älteste zuerst) - GPS und Verzeichnis haben keinen Einfluss
+        # Sort by date (oldest first) - GPS and directory have no influence
         images_with_data.sort(key=lambda x: x[1])
         
-        # Kopiere und benenne um
-        print(f"Kopiere {len(images_with_data)} Bilder...")
+        # Copy and rename
+        print(f"Copying {len(images_with_data)} images...")
         
-        for image_path, date, source, gps_coords, subfolder in tqdm(images_with_data, desc="Kopiere Bilder"):
+        for image_path, date, source, gps_coords, subfolder in tqdm(images_with_data, desc="Copying images"):
             try:
                 new_filename = self.generate_new_filename(image_path, date, gps_coords, subfolder)
                 unique_filename = self.get_unique_filename(new_filename)
@@ -318,74 +318,74 @@ class ImageSorter:
                 
                 shutil.copy2(image_path, dest_path)
                 
-                # GPS-Daten für CSV sammeln
+                # Collect GPS data for CSV
                 if gps_coords and self.include_gps:
                     lat, lon = gps_coords
                     date_str = date.strftime('%Y-%m-%d %H:%M:%S')
                     self.gps_data.append((unique_filename, lat, lon, date_str))
                 
-                # Erstelle Info-String für Ausgabe
+                # Create info string for output
                 info_parts = [source]
                 if gps_coords:
                     lat, lon = gps_coords
                     info_parts.append(f"GPS: {lat:.6f},{lon:.6f}")
                 if subfolder:
-                    info_parts.append(f"Ordner: {subfolder.strip('_')}")
+                    info_parts.append(f"Folder: {subfolder.strip('_')}")
                 
                 info_str = " | ".join(info_parts)
-                print(f"Kopiert: {image_path.name} -> {unique_filename} ({info_str})")
+                print(f"Copied: {image_path.name} -> {unique_filename} ({info_str})")
                 self.stats['copied_files'] += 1
                 
             except Exception as e:
-                print(f"Fehler beim Kopieren von {image_path}: {e}")
+                print(f"Error copying {image_path}: {e}")
                 self.stats['error_files'] += 1
         
-        print(f"\nFertig! {self.stats['copied_files']} Bilder wurden sortiert und kopiert.")
-        print(f"Zielverzeichnis: {self.dest_dir}")
+        print(f"\nDone! {self.stats['copied_files']} images were sorted and copied.")
+        print(f"Destination directory: {self.dest_dir}")
         
-        # Erstelle CSV-Datei für GPS-Daten
+        # Create CSV file for GPS data
         if self.include_gps:
             self.create_gps_csv()
         
-        # Zeige Statistik
+        # Show statistics
         self.print_statistics()
 
 
 def main():
-    """Hauptfunktion mit Kommandozeilen-Interface."""
+    """Main function with command line interface."""
     parser = argparse.ArgumentParser(
-        description="Sortiert Bilder nach ihrem Aufnahmedatum und kopiert sie in ein Zielverzeichnis.",
+        description="Sorts images by their capture date and copies them to a destination directory.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Beispiele:
-  python sort_images_by_date.py --source ~/Bilder/Unsortiert --dest ~/Bilder/Sortiert
-  python sort_images_by_date.py --source /media/fotos --dest ./sortiert --gps
-  python sort_images_by_date.py --source /media/fotos --dest ./sortiert --gps --dir
+Examples:
+  python sort_images_by_date.py --source ~/Pictures/Unsorted --dest ~/Pictures/Sorted
+  python sort_images_by_date.py --source /media/photos --dest ./sorted --gps
+  python sort_images_by_date.py --source /media/photos --dest ./sorted --gps --dir
         """
     )
     
     parser.add_argument(
         '--source',
         required=True,
-        help='Pfad zum Quellverzeichnis (rekursiv alle Bilder in Unterordnern finden)'
+        help='Path to source directory (recursively finds all images in subdirectories)'
     )
     
     parser.add_argument(
         '--dest',
         required=True,
-        help='Pfad zum Zielverzeichnis, in das alle sortierten Bilder kopiert werden'
+        help='Path to destination directory where all sorted images will be copied'
     )
     
     parser.add_argument(
         '--gps',
         action='store_true',
-        help='GPS-Koordinaten in den Dateinamen einbetten (Format: _lat,lon_ am Ende) und CSV-Datei erstellen'
+        help='Embed GPS coordinates in filename (format: _lat,lon_ at the end) and create CSV file'
     )
     
     parser.add_argument(
         '--dir',
         action='store_true',
-        help='Unterordner-Namen in den Dateinamen einbetten'
+        help='Embed subfolder names in filename'
     )
     
     args = parser.parse_args()
@@ -394,10 +394,10 @@ Beispiele:
         sorter = ImageSorter(args.source, args.dest, args.gps, args.dir)
         sorter.sort_images()
     except KeyboardInterrupt:
-        print("\nAbgebrochen durch Benutzer.")
+        print("\nAborted by user.")
         sys.exit(1)
     except Exception as e:
-        print(f"Fehler: {e}")
+        print(f"Error: {e}")
         sys.exit(1)
 
 
